@@ -8,7 +8,7 @@ import dev.restate.sdk.common.StateKey;
 import java.time.Duration;
 
 @VirtualObject
-public class DedupService {
+public class DedupEntry {
 
   private static final StateKey<Boolean> SEEN = StateKey.of("seen", Boolean.class);
 
@@ -18,7 +18,7 @@ public class DedupService {
       return false;
     }
     ctx.set(SEEN, Boolean.TRUE);
-    DedupServiceClient.fromContext(ctx, ctx.key()).send().clear(ttl);
+    DedupEntryClient.fromContext(ctx, ctx.key()).send().clear(ttl);
     return true;
   }
 

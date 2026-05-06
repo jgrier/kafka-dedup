@@ -20,7 +20,7 @@ A reusable Java module for deduplicating Kafka messages consumed via Restate's b
 
 The hot-path constraint is uniform:
 
-- **1 RPC per Kafka handler invocation** (the call to `DedupService.checkAndRecord`).
+- **1 RPC per Kafka handler invocation** (the call to `DedupEntry.checkAndRecord`).
 - **1 state lookup** inside that RPC (reading `SEEN`).
 
 No factory RPC, no config RPC, no JVM cache — every dedup check makes exactly one durable RPC and reads one state slot.
@@ -29,7 +29,7 @@ No factory RPC, no config RPC, no JVM cache — every dedup check makes exactly 
 
 The module ships **one Restate Virtual Object** plus a Java client facade.
 
-### `DedupService` — the dedup VO
+### `DedupEntry` — the dedup VO
 - Keyed by composite `(namespace, key)`. VO key encoding: `namespace + ":" + dedupKey`. Namespaces are validated to match `[a-zA-Z0-9_.\-]+` to disallow separator collisions.
 - State per instance: a single `SEEN` boolean (presence is the meaningful signal).
 - Handler `checkAndRecord(ttl: Duration) → boolean`:
@@ -38,7 +38,7 @@ The module ships **one Restate Virtual Object** plus a Java client facade.
 - Handler `clear()` — internal, called by self-destruct timer.
 
 ### Concurrency
-- `DedupService[(ns, key)]` is single-writer per dedup key. Serializes concurrent sightings for the same key, including across parallel Service-target delivery.
+- `DedupEntry[(ns, key)]` is single-writer per dedup key. Serializes concurrent sightings for the same key, including across parallel Service-target delivery.
 
 ## Java client API
 
@@ -67,7 +67,7 @@ Self-destruct timer fires `ttl` after first sighting in **wall-clock time** via 
 
 ### TTL configuration
 - TTL is supplied as a `Duration` argument to `Deduplicator.of`. It is per call site; users define a shared constant if they want a single source of truth.
-- TTL is passed through to `DedupService.checkAndRecord` and used at first sighting to schedule self-destruct.
+- TTL is passed through to `DedupEntry.checkAndRecord` and used at first sighting to schedule self-destruct.
 - If two call sites pass different TTLs for the same namespace, the dedup VO uses whichever TTL was passed at first sighting of a given key. Existing scheduled timers run their original deadline regardless of subsequent calls.
 - Changing TTL requires a code change and redeploy.
 
@@ -82,7 +82,7 @@ Two unrelated namespaces with coincidentally-equal dedup keys do not collide: `(
 
 ```java
 RestateHttpEndpointBuilder.builder()
-    .bind(new DedupService())
+    .bind(new DedupEntry())
     .bind(/* user's services */)
     .buildAndListen();
 ```

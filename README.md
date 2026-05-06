@@ -12,7 +12,7 @@ Restate's Kafka subscriptions already deduplicate at the `(topic, partition, off
 
 | Path                | What                                                                                  |
 |---------------------|---------------------------------------------------------------------------------------|
-| `lib/`              | The reusable dedup module (`DedupService`, `Deduplicator`).                           |
+| `lib/`              | The reusable dedup module (`DedupEntry`, `Deduplicator`).                           |
 | `demo/`             | Working demo: `OrderProcessor` (Restate Service) + `ProducerMain` (data generator).   |
 | `docker-compose.yml`| Single-broker Kafka (KRaft) + Restate server.                                         |
 | `restate.toml`      | Restate config that names the Kafka cluster `default`.                                |
@@ -106,11 +106,11 @@ MESSAGE_COUNT=500 DUPLICATE_RATE=0.5 ./bin/produce.sh
 
 This repo doesn't publish the lib to a registry yet, but in your project you'd reference it with the same Maven coordinates we use locally: `dev.restate.kafka:lib`.
 
-### Bind `DedupService` alongside your services
+### Bind `DedupEntry` alongside your services
 
 ```java
 Endpoint endpoint = Endpoint.builder()
-    .bind(new DedupService())   // from dev.restate.kafka.dedup
+    .bind(new DedupEntry())   // from dev.restate.kafka.dedup
     .bind(new MyService())      // your code
     .build();
 
@@ -146,7 +146,7 @@ The same call works inside `@VirtualObject` handlers too (`Deduplicator.of` acce
 
 ### What `dedup.checkAndRecord(key)` costs
 
-**Exactly one durable RPC and one state read.** That's the entire hot-path budget: the handler invokes `DedupService[namespace:key].checkAndRecord(ttl)`, which reads its `SEEN` state once, and returns. On first sighting it also writes the state and schedules a self-destruct timer (a journaled durable side-effect, not an additional round-trip).
+**Exactly one durable RPC and one state read.** That's the entire hot-path budget: the handler invokes `DedupEntry[namespace:key].checkAndRecord(ttl)`, which reads its `SEEN` state once, and returns. On first sighting it also writes the state and schedules a self-destruct timer (a journaled durable side-effect, not an additional round-trip).
 
 ---
 
@@ -154,18 +154,18 @@ The same call works inside `@VirtualObject` handlers too (`Deduplicator.of` acce
 
 The library is intentionally minimal — one Restate Virtual Object plus a thin Java client.
 
-### `DedupService` (Virtual Object, keyed by `namespace + ":" + key`)
+### `DedupEntry` (Virtual Object, keyed by `namespace + ":" + key`)
 
 ```java
 @VirtualObject
-public class DedupService {
+public class DedupEntry {
   private static final StateKey<Boolean> SEEN = StateKey.of("seen", Boolean.class);
 
   @Handler
   public boolean checkAndRecord(ObjectContext ctx, Duration ttl) {
     if (ctx.get(SEEN).isPresent()) return false;
     ctx.set(SEEN, Boolean.TRUE);
-    DedupServiceClient.fromContext(ctx, ctx.key()).send().clear(ttl);
+    DedupEntryClient.fromContext(ctx, ctx.key()).send().clear(ttl);
     return true;
   }
 
@@ -187,7 +187,7 @@ public final class Deduplicator {
 }
 ```
 
-The `of` factory is purely synchronous — no I/O, just validates the namespace and stores the TTL. `checkAndRecord` invokes `DedupService[namespace:key].checkAndRecord(ttl)` and returns the boolean.
+The `of` factory is purely synchronous — no I/O, just validates the namespace and stores the TTL. `checkAndRecord` invokes `DedupEntry[namespace:key].checkAndRecord(ttl)` and returns the boolean.
 
 ### Performance budget
 
@@ -243,4 +243,4 @@ docker exec kafka /opt/kafka/bin/kafka-get-offsets.sh \
 ```
 
 - **Unit tests** for `KeyEncoding` — namespace validation and composite-key encoding.
-- **Integration tests** for `DedupService` — runs against a real `restatedev/restate` container (via `dev.restate:sdk-testing` + Testcontainers). Covers first-sighting/duplicate semantics, namespace isolation, and the `clear()` reset path.
+- **Integration tests** for `DedupEntry` — runs against a real `restatedev/restate` container (via `dev.restate:sdk-testing` + Testcontainers). Covers first-sighting/duplicate semantics, namespace isolation, and the `clear()` reset path.

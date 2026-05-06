@@ -27,6 +27,6 @@ public final class Deduplicator {
 
   public boolean checkAndRecord(String key) {
     String composite = KeyEncoding.encode(namespace, key);
-    return DedupServiceClient.fromContext(ctx, composite).checkAndRecord(ttl).await();
+    return DedupEntryClient.fromContext(ctx, composite).checkAndRecord(ttl).await();
   }
 }
