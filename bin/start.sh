@@ -32,8 +32,7 @@ echo "    pid=$APP_PID  log=.demo/app.log"
 
 echo "==> Waiting for app to listen on :9080..."
 for i in $(seq 1 60); do
-    if curl -sf -o /dev/null http://localhost:9080/discover 2>/dev/null \
-        || curl -sf -o /dev/null http://localhost:9080 2>/dev/null; then
+    if nc -z localhost 9080 2>/dev/null; then
         break
     fi
     sleep 1
