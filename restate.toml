@@ -1,4 +1,4 @@
 [ingress]
 kafka-clusters = [
-    { name = "default", brokers = ["kafka:9092"] }
+    { name = "default", brokers = ["kafka:29092"] }
 ]

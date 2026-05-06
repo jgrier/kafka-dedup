@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 INPUT_TOPIC="${INPUT_TOPIC:-orders-raw}"
 OUTPUT_TOPIC="${OUTPUT_TOPIC:-orders-clean}"
-RESTATE_ADMIN_URL="${RESTATE_ADMIN_URL:-http://localhost:19070}"
+RESTATE_ADMIN_URL="${RESTATE_ADMIN_URL:-http://localhost:9070}"
 APP_URL="${APP_URL:-http://host.docker.internal:9080}"
 
 echo "==> Starting docker compose stack (Kafka + Restate)..."
@@ -23,7 +23,7 @@ docker exec kafka /opt/kafka/bin/kafka-topics.sh \
 
 echo "==> Starting demo application (DemoMain) in background on :9080..."
 mkdir -p .demo
-export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-localhost:19092}"
+export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}"
 export INPUT_TOPIC OUTPUT_TOPIC
 nohup ./gradlew :demo:run --quiet > .demo/app.log 2>&1 &
 APP_PID=$!

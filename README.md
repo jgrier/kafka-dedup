@@ -2,7 +2,9 @@
 
 A reusable Java module for deduplicating Kafka messages consumed via [Restate's](https://restate.dev) Kafka subscriptions, plus a runnable end-to-end demo.
 
-The dedup module gives a Restate handler exactly-once message processing semantics on top of Kafka's at-least-once delivery: regardless of how many duplicate copies of a message land in the topic, your handler's business logic runs at most once per logical event.
+The dedup module is for **application-defined** duplicate detection: when the same logical event arrives as multiple distinct Kafka messages — different offsets, e.g. an upstream producer retried a write, two sources independently emitted the same event, or an idempotency key spans producer instances — and you want your handler's business logic to run at most once per logical event.
+
+Restate's Kafka subscriptions already deduplicate at the `(topic, partition, offset)` level on their own. This module sits a layer above that, where the caller supplies the application-meaningful key that defines what "the same event" means.
 
 ---
 
@@ -66,8 +68,8 @@ The demo wires up:
 ```
 
 When it finishes, you have:
-- Kafka on `localhost:19092`
-- Restate ingress on `localhost:18080`, admin on `localhost:19070`
+- Kafka on `localhost:9092`
+- Restate ingress on `localhost:8080`, admin on `localhost:9070`
 - The demo JVM listening on `localhost:9080` (logs in `.demo/app.log`)
 - Topics `orders-raw` and `orders-clean` created
 - A Kafka subscription wired to `OrderProcessor.process`
@@ -213,9 +215,9 @@ For the full design discussion — what alternatives we considered, why we rejec
 
 ## Troubleshooting
 
-**Port 8080 or 9070 already in use.** The compose file maps Restate ports to `18080` (ingress) and `19070` (admin) on the host to avoid common conflicts. If even those are taken, edit `docker-compose.yml`.
+**Port 8080, 9070, or 9092 already in use.** The compose file uses standard ports — if you have another Restate or Kafka running locally, stop it first (`docker ps`) or remap the ports in `docker-compose.yml` and the matching env vars in `bin/start.sh`.
 
-**App can't reach Kafka.** The local JVM uses `localhost:19092` (the EXTERNAL listener); Restate-in-container uses `kafka:9092` (the internal listener). Both are configured automatically by `start.sh` and `restate.toml`.
+**App can't reach Kafka.** The local JVM uses `localhost:9092` (the EXTERNAL listener); Restate-in-container uses `kafka:29092` (the INTERNAL listener). Both are configured automatically by `start.sh` and `restate.toml`.
 
 **Restate can't reach the app.** Restate calls back to your local JVM at `host.docker.internal:9080`. On Docker Desktop (Mac/Windows) that resolves automatically; on Linux, the compose file declares `extra_hosts: host-gateway` to make it work too.
 
