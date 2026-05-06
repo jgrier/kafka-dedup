@@ -45,17 +45,17 @@ The module ships **one Restate Virtual Object** plus a Java client facade.
 ```java
 @Handler
 public void process(ObjectContext ctx, OrderEvent event) {
-  Dedup dedup = Dedup.of(ctx, "orders", Duration.ofHours(24));
+  DedupHelper dedup = DedupHelper.of(ctx, "orders", Duration.ofHours(24));
   if (!dedup.checkAndRecord(event.id()).await()) return;
   // business logic
 }
 ```
 
-`Dedup` exposes:
-- `static Dedup of(Context ctx, String namespace, Duration ttl)` — synchronous handle constructor; no RPC. Validates namespace.
+`DedupHelper` exposes:
+- `static DedupHelper of(Context ctx, String namespace, Duration ttl)` — synchronous handle constructor; no RPC. Validates namespace.
 - `Awaitable<Boolean> checkAndRecord(String key)` — `true` on first sighting, `false` on duplicate. Caller branches on the result; module does not provide lambda/wrapper sugar.
 
-`Dedup.of` accepts the SDK's base `Context`, so it works whether the caller is in a `@VirtualObject` (`ObjectContext`) or `@Service` (regular `Context`). Same surface for use cases B/C/D.
+`DedupHelper.of` accepts the SDK's base `Context`, so it works whether the caller is in a `@VirtualObject` (`ObjectContext`) or `@Service` (regular `Context`). Same surface for use cases B/C/D.
 
 ## Behavior details
 
@@ -66,7 +66,7 @@ Strict by-key: any sighting after the first is a duplicate, regardless of payloa
 Self-destruct timer fires `ttl` after first sighting in **wall-clock time** via Restate's durable delayed-call mechanism. No event-time abstraction, no watermark, no per-call timestamp argument.
 
 ### TTL configuration
-- TTL is supplied as a `Duration` argument to `Dedup.of`. It is per call site; users define a shared constant if they want a single source of truth.
+- TTL is supplied as a `Duration` argument to `DedupHelper.of`. It is per call site; users define a shared constant if they want a single source of truth.
 - TTL is passed through to `Deduplicator.checkAndRecord` and used at first sighting to schedule self-destruct.
 - If two call sites pass different TTLs for the same namespace, the dedup VO uses whichever TTL was passed at first sighting of a given key. Existing scheduled timers run their original deadline regardless of subsequent calls.
 - Changing TTL requires a code change and redeploy.

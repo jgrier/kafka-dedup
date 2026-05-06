@@ -1,7 +1,7 @@
 package dev.restate.kafka.dedup.demo;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.restate.kafka.dedup.Dedup;
+import dev.restate.kafka.dedup.DedupHelper;
 import dev.restate.sdk.Context;
 import dev.restate.sdk.annotation.Handler;
 import dev.restate.sdk.annotation.Service;
@@ -26,7 +26,7 @@ public class OrderProcessor {
 
   @Handler
   public void process(Context ctx, OrderEvent event) {
-    Dedup dedup = Dedup.of(ctx, "orders", DEDUP_TTL);
+    DedupHelper dedup = DedupHelper.of(ctx, "orders", DEDUP_TTL);
     if (!dedup.checkAndRecord(event.eventId())) {
       return;
     }

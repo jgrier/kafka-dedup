@@ -12,7 +12,7 @@ Restate's Kafka subscriptions already deduplicate at the `(topic, partition, off
 
 | Path                | What                                                                                  |
 |---------------------|---------------------------------------------------------------------------------------|
-| `lib/`              | The reusable dedup module (`Deduplicator`, `Dedup`).                           |
+| `lib/`              | The reusable dedup module (`Deduplicator`, `DedupHelper`).                           |
 | `demo/`             | Working demo: `OrderProcessor` (Restate Service) + `ProducerMain` (data generator).   |
 | `docker-compose.yml`| Single-broker Kafka (KRaft) + Restate server.                                         |
 | `restate.toml`      | Restate config that names the Kafka cluster `default`.                                |
@@ -34,7 +34,7 @@ The demo wires up:
    Terminal C                          │  Restate (subscribed to orders-raw)     │
    ──────────                          │                                         │
    producer (with dups) ──┐            │   OrderProcessor.process(event):        │
-                          │            │     dedup = Dedup.of(...)        │
+                          │            │     dedup = DedupHelper.of(...)        │
                           │            │     if !dedup.checkAndRecord(eventId):  │
                           ▼            │       return    ← duplicates exit here  │
                    ┌──────────────┐    │     publish(orders-clean, event)        │
@@ -117,7 +117,7 @@ Endpoint endpoint = Endpoint.builder()
 RestateHttpServer.listen(endpoint);
 ```
 
-### Use `Dedup` inside any handler
+### Use `DedupHelper` inside any handler
 
 ```java
 @Service
@@ -125,7 +125,7 @@ public class MyService {
 
   @Handler
   public void process(Context ctx, MyEvent event) {
-    var dedup = Dedup.of(ctx, "my-namespace", Duration.ofHours(1));
+    var dedup = DedupHelper.of(ctx, "my-namespace", Duration.ofHours(1));
     if (!dedup.checkAndRecord(event.eventId())) {
       return;  // duplicate — silently drop
     }
@@ -136,9 +136,9 @@ public class MyService {
 }
 ```
 
-The same call works inside `@VirtualObject` handlers too (`Dedup.of` accepts the SDK's base `Context`, which both `Context` and `ObjectContext` satisfy).
+The same call works inside `@VirtualObject` handlers too (`DedupHelper.of` accepts the SDK's base `Context`, which both `Context` and `ObjectContext` satisfy).
 
-### What `Dedup.of(ctx, namespace, ttl)` does
+### What `DedupHelper.of(ctx, namespace, ttl)` does
 
 - **Synchronous** — no RPC. Just constructs a handle bound to the namespace + TTL.
 - **Namespace** — a string identifier (validated against `[a-zA-Z0-9_.-]+`). Two namespaces with the same dedup key are isolated.
