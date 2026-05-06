@@ -12,14 +12,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @RestateTest
-class DedupEntryIntegrationTest {
+class DeduplicatorIntegrationTest {
 
   @BindService
-  DedupEntry dedupEntry = new DedupEntry();
+  Deduplicator deduplicator = new Deduplicator();
 
   @Test
   void firstSightingReturnsTrueDuplicateReturnsFalse(@RestateClient Client client) {
-    var dedup = DedupEntryClient.fromClient(client, "orders:abc-123");
+    var dedup = DeduplicatorClient.fromClient(client, "orders:abc-123");
     assertTrue(dedup.checkAndRecord(Duration.ofMinutes(5)));
     assertFalse(dedup.checkAndRecord(Duration.ofMinutes(5)));
     assertFalse(dedup.checkAndRecord(Duration.ofMinutes(5)));
@@ -27,9 +27,9 @@ class DedupEntryIntegrationTest {
 
   @Test
   void differentCompositeKeysAreIndependent(@RestateClient Client client) {
-    var ordersAbc = DedupEntryClient.fromClient(client, "orders:abc-1");
-    var ordersDef = DedupEntryClient.fromClient(client, "orders:def-2");
-    var paymentsAbc = DedupEntryClient.fromClient(client, "payments:abc-1");
+    var ordersAbc = DeduplicatorClient.fromClient(client, "orders:abc-1");
+    var ordersDef = DeduplicatorClient.fromClient(client, "orders:def-2");
+    var paymentsAbc = DeduplicatorClient.fromClient(client, "payments:abc-1");
 
     assertTrue(ordersAbc.checkAndRecord(Duration.ofMinutes(5)));
     assertTrue(ordersDef.checkAndRecord(Duration.ofMinutes(5)));
@@ -42,7 +42,7 @@ class DedupEntryIntegrationTest {
 
   @Test
   void clearResetsState(@RestateClient Client client) {
-    var dedup = DedupEntryClient.fromClient(client, "orders:cleared-key");
+    var dedup = DeduplicatorClient.fromClient(client, "orders:cleared-key");
 
     assertTrue(dedup.checkAndRecord(Duration.ofMinutes(5)));
     assertFalse(dedup.checkAndRecord(Duration.ofMinutes(5)));

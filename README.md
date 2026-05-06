@@ -12,7 +12,7 @@ Restate's Kafka subscriptions already deduplicate at the `(topic, partition, off
 
 | Path                | What                                                                                  |
 |---------------------|---------------------------------------------------------------------------------------|
-| `lib/`              | The reusable dedup module (`DedupEntry`, `Deduplicator`).                           |
+| `lib/`              | The reusable dedup module (`Deduplicator`, `Dedup`).                           |
 | `demo/`             | Working demo: `OrderProcessor` (Restate Service) + `ProducerMain` (data generator).   |
 | `docker-compose.yml`| Single-broker Kafka (KRaft) + Restate server.                                         |
 | `restate.toml`      | Restate config that names the Kafka cluster `default`.                                |
@@ -34,7 +34,7 @@ The demo wires up:
    Terminal C                          │  Restate (subscribed to orders-raw)     │
    ──────────                          │                                         │
    producer (with dups) ──┐            │   OrderProcessor.process(event):        │
-                          │            │     dedup = Deduplicator.of(...)        │
+                          │            │     dedup = Dedup.of(...)        │
                           │            │     if !dedup.checkAndRecord(eventId):  │
                           ▼            │       return    ← duplicates exit here  │
                    ┌──────────────┐    │     publish(orders-clean, event)        │
@@ -106,18 +106,18 @@ MESSAGE_COUNT=500 DUPLICATE_RATE=0.5 ./bin/produce.sh
 
 This repo doesn't publish the lib to a registry yet, but in your project you'd reference it with the same Maven coordinates we use locally: `dev.restate.kafka:lib`.
 
-### Bind `DedupEntry` alongside your services
+### Bind `Deduplicator` alongside your services
 
 ```java
 Endpoint endpoint = Endpoint.builder()
-    .bind(new DedupEntry())   // from dev.restate.kafka.dedup
+    .bind(new Deduplicator())   // from dev.restate.kafka.dedup
     .bind(new MyService())      // your code
     .build();
 
 RestateHttpServer.listen(endpoint);
 ```
 
-### Use the `Deduplicator` inside any handler
+### Use `Dedup` inside any handler
 
 ```java
 @Service
@@ -125,7 +125,7 @@ public class MyService {
 
   @Handler
   public void process(Context ctx, MyEvent event) {
-    var dedup = Deduplicator.of(ctx, "my-namespace", Duration.ofHours(1));
+    var dedup = Dedup.of(ctx, "my-namespace", Duration.ofHours(1));
     if (!dedup.checkAndRecord(event.eventId())) {
       return;  // duplicate — silently drop
     }
@@ -136,36 +136,13 @@ public class MyService {
 }
 ```
 
-The same call works inside `@VirtualObject` handlers too (`Deduplicator.of` accepts the SDK's base `Context`, which both `Context` and `ObjectContext` satisfy).
+The same call works inside `@VirtualObject` handlers too (`Dedup.of` accepts the SDK's base `Context`, which both `Context` and `ObjectContext` satisfy).
 
-### What `Deduplicator.of(ctx, namespace, ttl)` does
+### What `Dedup.of(ctx, namespace, ttl)` does
 
 - **Synchronous** — no RPC. Just constructs a handle bound to the namespace + TTL.
 - **Namespace** — a string identifier (validated against `[a-zA-Z0-9_.-]+`). Two namespaces with the same dedup key are isolated.
 - **TTL** — how long the dedup state for a key lives before being garbage-collected. After the TTL elapses, a re-arrival of the same key is treated as a fresh first-sighting.
-
----
-
-## Troubleshooting
-
-**Port 8080, 9070, or 9092 already in use.** The compose file uses standard ports — if you have another Restate or Kafka running locally, stop it first (`docker ps`) or remap the ports in `docker-compose.yml` and the matching env vars in `bin/start.sh`.
-
-**App can't reach Kafka.** The local JVM uses `localhost:9092` (the EXTERNAL listener); Restate-in-container uses `kafka:29092` (the INTERNAL listener). Both are configured automatically by `start.sh` and `restate.toml`.
-
-**Restate can't reach the app.** Restate calls back to your local JVM at `host.docker.internal:9080`. On Docker Desktop (Mac/Windows) that resolves automatically; on Linux, the compose file declares `extra_hosts: host-gateway` to make it work too.
-
-**No deduplication happening.** Check `.demo/app.log` for handler errors. If `OrderProcessor.process` is throwing on the Kafka producer call, the dedup state still records "seen" but the publish doesn't happen — Restate retries the whole invocation, and on retry the recorded `true` is replayed (no re-record), but the publish path still fails the same way. Fix the underlying producer issue.
-
-**Topic offsets to confirm dedup worked:**
-
-```bash
-docker exec kafka /opt/kafka/bin/kafka-get-offsets.sh \
-    --bootstrap-server localhost:9092 --topic orders-raw
-docker exec kafka /opt/kafka/bin/kafka-get-offsets.sh \
-    --bootstrap-server localhost:9092 --topic orders-clean
-```
-
-`orders-clean` should have strictly fewer offsets than `orders-raw` (by the duplicate count).
 
 ---
 
@@ -176,4 +153,4 @@ docker exec kafka /opt/kafka/bin/kafka-get-offsets.sh \
 ```
 
 - **Unit tests** for `KeyEncoding` — namespace validation and composite-key encoding.
-- **Integration tests** for `DedupEntry` — runs against a real `restatedev/restate` container (via `dev.restate:sdk-testing` + Testcontainers). Covers first-sighting/duplicate semantics, namespace isolation, and the `clear()` reset path.
+- **Integration tests** for `Deduplicator` — runs against a real `restatedev/restate` container (via `dev.restate:sdk-testing` + Testcontainers). Covers first-sighting/duplicate semantics, namespace isolation, and the `clear()` reset path.

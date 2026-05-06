@@ -1,32 +1,29 @@
 package dev.restate.kafka.dedup;
 
-import dev.restate.kafka.dedup.internal.KeyEncoding;
-import dev.restate.sdk.Context;
+import dev.restate.sdk.ObjectContext;
+import dev.restate.sdk.annotation.Handler;
+import dev.restate.sdk.annotation.VirtualObject;
+import dev.restate.sdk.common.StateKey;
 
 import java.time.Duration;
 
-public final class Deduplicator {
+@VirtualObject
+public class Deduplicator {
 
-  private final Context ctx;
-  private final String namespace;
-  private final Duration ttl;
+  private static final StateKey<Boolean> SEEN = StateKey.of("seen", Boolean.class);
 
-  private Deduplicator(Context ctx, String namespace, Duration ttl) {
-    this.ctx = ctx;
-    this.namespace = namespace;
-    this.ttl = ttl;
-  }
-
-  public static Deduplicator of(Context ctx, String namespace, Duration ttl) {
-    KeyEncoding.validateNamespace(namespace);
-    if (ttl == null || ttl.isNegative() || ttl.isZero()) {
-      throw new IllegalArgumentException("ttl must be a positive Duration");
+  @Handler
+  public boolean checkAndRecord(ObjectContext ctx, Duration ttl) {
+    if (ctx.get(SEEN).isPresent()) {
+      return false;
     }
-    return new Deduplicator(ctx, namespace, ttl);
+    ctx.set(SEEN, Boolean.TRUE);
+    DeduplicatorClient.fromContext(ctx, ctx.key()).send().clear(ttl);
+    return true;
   }
 
-  public boolean checkAndRecord(String key) {
-    String composite = KeyEncoding.encode(namespace, key);
-    return DedupEntryClient.fromContext(ctx, composite).checkAndRecord(ttl).await();
+  @Handler
+  public void clear(ObjectContext ctx) {
+    ctx.clearAll();
   }
 }

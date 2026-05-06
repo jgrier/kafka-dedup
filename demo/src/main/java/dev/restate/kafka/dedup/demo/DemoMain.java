@@ -1,6 +1,6 @@
 package dev.restate.kafka.dedup.demo;
 
-import dev.restate.kafka.dedup.DedupEntry;
+import dev.restate.kafka.dedup.Deduplicator;
 import dev.restate.sdk.endpoint.Endpoint;
 import dev.restate.sdk.http.vertx.RestateHttpServer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -26,7 +26,7 @@ public class DemoMain {
     OrderProcessor.configureProducer(producer, outputTopic);
 
     Endpoint endpoint = Endpoint.builder()
-        .bind(new DedupEntry())
+        .bind(new Deduplicator())
         .bind(new OrderProcessor())
         .build();
 
